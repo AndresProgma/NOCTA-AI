@@ -1,4 +1,4 @@
-accounts = []
+instalación de dramaturgo Python -maccounts = []
 
 def get_users():
     return accounts
