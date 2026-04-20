@@ -4,44 +4,51 @@ import sys
 import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from dotenv import load_dotenv
 from TikTokApi import TikTokApi
-from services.scraping import search_videos, get_comments_for_video
+from services.scraping import get_videos_by_hashtag
 from services.analytics import analyze_signals
+from services.session_config import create_sessions_with_retry, select_region
+from services.human_pace import collect_texts_from_videos
 
+load_dotenv()
 ms_token = os.environ.get("ms_token", None)
+print(f"[DEBUG] ms_token cargado: {ms_token[:30] if ms_token else 'NONE ❌'}")
 
+PIPELINE_NAME = "tiktok_hashtag"
 
-async def run_pipeline(keyword: str, video_count: int = 5, comments_per_video: int = 20) -> dict:
+""" Este pipeline toma un hashtag como punto de entrada y extrae las conversaciones reales que ocurren alrededor de ese tema en TikTok. Accede
+  a los videos más relevantes del hashtag, recolecta los comentarios de la audiencia y los procesa con el motor de análisis semántico de
+  Nocta para identificar fricciones, intenciones de compra y patrones de lenguaje recurrentes.
+
+  Para qué sirve a Nocta: Cuando un cliente quiere entrar a un nicho o lanzar un producto, este pipeline responde la pregunta más importante
+  antes de invertir: ¿qué está diciendo realmente la audiencia sobre este tema? No métricas de vanidad, sino el texto crudo de personas
+  reales expresando sus problemas, frustraciones y deseos. Es la base para construir mensajes de venta que conectan."""
+
+async def run_pipeline(keyword: str, video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None) -> dict:
+    # Analiza un hashtag específico para descubrir qué dice la audiencia en TikTok.
+    # Nocta lo usa para entender los dolores, deseos e intenciones de compra reales de un nicho.
     print(f"\n🚀 Iniciando pipeline para: '{keyword}'")
     print("=" * 50)
 
-    async with TikTokApi() as api:
-        await api.create_sessions(
-            ms_tokens=[ms_token],
-            num_sessions=1,
-            sleep_after=3,
-            browser=os.getenv("TIKTOK_BROWSER", "chromium"),
-        )
-
-        # Etapa 1: buscar videos por keyword
-        print(f"\n📹 Etapa 1: Buscando {video_count} videos sobre '{keyword}'...")
-        videos = await search_videos(api, keyword, count=video_count)
+    async def _run(api):
+        hashtag = keyword.lstrip("#")
+        print(f"\n📹 Etapa 1: Buscando {video_count} videos para #{hashtag}...")
+        videos = await get_videos_by_hashtag(api, hashtag, count=video_count)
         print(f"   → {len(videos)} videos encontrados")
 
-        # Etapa 2: recolectar descripciones + comentarios de cada video
-        print(f"\n💬 Etapa 2: Extrayendo comentarios ({comments_per_video} por video)...")
-        all_texts = []
-        for video in videos:
-            if video["descripcion"]:
-                all_texts.append(video["descripcion"])
-            comments = await get_comments_for_video(api, video["id"], count=comments_per_video)
-            all_texts.extend(comments)
-            print(f"   → Video {video['id']}: {len(comments)} comentarios")
-
+        print(f"\n💬 Etapa 2: Extrayendo comentarios (modo humano)...")
+        all_texts = await collect_texts_from_videos(api, videos, comments_per_video)
         print(f"   → Total textos recolectados: {len(all_texts)}")
-        print(f"   [DEBUG textos]: {all_texts[:3]}")  # muestra los primeros 3
+        return all_texts
 
-    # Etapa 3: análisis semántico con Groq
+    if api is not None:
+        all_texts = await _run(api)
+    else:
+        async with TikTokApi() as api:
+            await create_sessions_with_retry(api, ms_token, pipeline=PIPELINE_NAME, country=country)
+            all_texts = await _run(api)
+
     print(f"\n🧠 Etapa 3: Analizando señales con IA...")
     insights = analyze_signals(keyword, all_texts)
 
@@ -53,4 +60,4 @@ async def run_pipeline(keyword: str, video_count: int = 5, comments_per_video: i
 
 
 if __name__ == "__main__":
-    asyncio.run(run_pipeline("#nopuedobajardepeso", video_count=3, comments_per_video=10))
+    asyncio.run(run_pipeline("#nopuedobajardepeso", video_count=2, comments_per_video=10, country=select_region()))

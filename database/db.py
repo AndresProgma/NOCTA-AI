@@ -1,4 +1,5 @@
-instalación de dramaturgo Python -maccounts = []
+# Simulación de una base de datos en memoria
+accounts = []
 
 def get_users():
     return accounts

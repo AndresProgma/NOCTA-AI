@@ -182,20 +182,23 @@ async def get_video_example():
 
 
 async def get_videos_by_hashtag(api, hashtag: str, count: int = 10) -> list[dict]:
+    # Itera el feed de un hashtag y extrae id, descripción y hashtags de cada video hasta el límite.
     videos = []
     tag = api.hashtag(name=hashtag)
     async for video in tag.videos(count=count):
         data = video.as_dict
-        print(f"   [DEBUG video encontrado]: {data.get('id')} - {data.get('desc', '')[:50]}")
         videos.append({
             "id": data.get("id"),
             "descripcion": data.get("desc", ""),
             "hashtags": [h.get("hashtagName") for h in data.get("textExtra", []) if h.get("hashtagName")],
         })
+        if len(videos) >= count:
+            break
     return videos
 
 
 async def get_user_videos(api, username: str, count: int = 10) -> list[dict]:
+    # Obtiene los últimos videos públicos de un perfil de TikTok hasta el límite indicado.
     videos = []
     user = api.user(username)
     async for video in user.videos(count=count):
@@ -204,10 +207,13 @@ async def get_user_videos(api, username: str, count: int = 10) -> list[dict]:
             "id": data.get("id"),
             "descripcion": data.get("desc", ""),
         })
+        if len(videos) >= count:
+            break
     return videos
 
 
 async def get_comments_for_video(api, video_id: str, count: int = 20) -> list[str]:
+    # Extrae el texto de los comentarios de un video dado su ID.
     video = api.video(id=video_id)
     texts = []
     async for comment in video.comments(count=count):
