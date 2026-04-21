@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 from TikTokApi import TikTokApi
 from services.scraping import search_videos
-from services.analytics import analyze_signals
-from services.session_config import create_sessions_with_retry, select_region
+from services.analytics import analyze_signals, build_transcription_context
+from services.session_config import create_sessions_with_retry, select_region, ask_transcription
 from services.human_pace import collect_texts_from_videos
 
 load_dotenv()
@@ -23,7 +23,7 @@ PIPELINE_NAME = "tiktok_validacion"
   distintas. Este pipeline elimina la adivinanza y determina con datos cuál es el ángulo de mensaje que más conecta antes de invertir en
   producción o pauta. Es una validación de mercado rápida, económica y basada en comportamiento real, no en suposiciones o tendencias superficiales."""
 
-async def run_pipeline(keywords: list[str], video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None) -> dict:
+async def run_pipeline(keywords: list[str], video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None, transcribe: bool = False) -> dict:
     # Compara varias keywords en paralelo midiendo fricción e intención de compra en cada una.
     # Nocta lo usa para validar qué ángulo de mensaje conecta más con la audiencia antes de invertir en contenido o ads.
     print(f"\n🚀 Iniciando pipeline de validación de keywords")
@@ -43,8 +43,18 @@ async def run_pipeline(keywords: list[str], video_count: int = 2, comments_per_v
             all_texts = await collect_texts_from_videos(api, videos, comments_per_video)
             print(f"   → Total textos: {len(all_texts)}")
 
+            video_context = ""
+            if transcribe:
+                print(f"   🎙️  Transcribiendo videos de '{keyword}'...")
+                video_context = await build_transcription_context(api, videos)
+                if video_context:
+                    print(f"\n   📄 Contexto '{keyword}':")
+                    print("   " + "-" * 48)
+                    print(video_context)
+                    print("   " + "-" * 48)
+
             print(f"   🧠 Analizando señales...")
-            resultados[keyword] = analyze_signals(keyword, all_texts)
+            resultados[keyword] = analyze_signals(keyword, all_texts, video_context=video_context)
         return resultados
 
     if api is not None:
@@ -69,9 +79,12 @@ async def run_pipeline(keywords: list[str], video_count: int = 2, comments_per_v
 
 
 if __name__ == "__main__":
+    country = select_region()
+    transcribe = ask_transcription()
     asyncio.run(run_pipeline(
         keywords=["bajar de peso", "quemar grasa", "perder barriga"],
         video_count=2,
         comments_per_video=10,
-        country=select_region(),
+        country=country,
+        transcribe=transcribe,
     ))

@@ -25,10 +25,12 @@ async def get_trending_videos(api, count=5):
     async for video in api.trending.videos(count=count):
         data = video.as_dict
 
+        _autor = data.get("author", {}).get("uniqueId") or ""
+        _video_id = data.get("id") or ""
         video_info = {
-            "id": data.get("id"),
+            "id": _video_id,
             "descripcion": data.get("desc"),                                          # texto del video → análisis semántico central de Nocta
-            "autor": data.get("author", {}).get("uniqueId"),
+            "autor": _autor,
             "autor_verificado": data.get("author", {}).get("verified"),               # distinguir creadores vs usuarios comunes
             "autor_seguidores": data.get("author", {}).get("followerCount"),          # peso/influencia del creador
             "fecha_creacion": data.get("createTime"),                                 # temporalidad de la señal
@@ -41,6 +43,8 @@ async def get_trending_videos(api, count=5):
             "hashtags": [h.get("hashtagName") for h in data.get("textExtra", []) if h.get("hashtagName")],  # temas y nichos activos
             "musica_titulo": data.get("music", {}).get("title"),                      # tendencias culturales ligadas al contenido
             "musica_artista": data.get("music", {}).get("authorName"),
+            "play_url": data.get("video", {}).get("playAddr") or data.get("video", {}).get("downloadAddr", ""),
+            "url": f"https://www.tiktok.com/@{_autor}/video/{_video_id}",
         }
 
         videos_data.append(video_info)
@@ -59,6 +63,7 @@ async def get_trending_videos(api, count=5):
         print(f"🔖 Guardados: {video_info['guardados']}")
         print(f"🏷️ Hashtags: {', '.join(video_info['hashtags']) if video_info['hashtags'] else 'ninguno'}")
         print(f"🎵 Música: {video_info['musica_titulo']} — {video_info['musica_artista']}")
+        print(f"🔗 URL: {video_info['url']}")
 
         i += 1
 
@@ -123,9 +128,13 @@ async def search_videos(api, keyword: str, count: int = 10) -> list[dict]:
 
         if "item_list" in response:
             for video in response["item_list"]:
+                _autor = video.get("author", {}).get("uniqueId") or ""
+                _video_id = video.get("id") or ""
                 videos.append({
-                    "id": video.get("id"),
+                    "id": _video_id,
                     "descripcion": video.get("desc", ""),
+                    "autor": _autor,
+                    "url": f"https://www.tiktok.com/@{_autor}/video/{_video_id}",
                 })
                 if len(videos) >= count:
                     break
@@ -187,10 +196,15 @@ async def get_videos_by_hashtag(api, hashtag: str, count: int = 10) -> list[dict
     tag = api.hashtag(name=hashtag)
     async for video in tag.videos(count=count):
         data = video.as_dict
+        _autor = data.get("author", {}).get("uniqueId") or ""
+        _video_id = data.get("id") or ""
         videos.append({
-            "id": data.get("id"),
+            "id": _video_id,
             "descripcion": data.get("desc", ""),
+            "autor": _autor,
             "hashtags": [h.get("hashtagName") for h in data.get("textExtra", []) if h.get("hashtagName")],
+            "play_url": data.get("video", {}).get("playAddr") or data.get("video", {}).get("downloadAddr", ""),
+            "url": f"https://www.tiktok.com/@{_autor}/video/{_video_id}",
         })
         if len(videos) >= count:
             break
@@ -203,9 +217,13 @@ async def get_user_videos(api, username: str, count: int = 10) -> list[dict]:
     user = api.user(username)
     async for video in user.videos(count=count):
         data = video.as_dict
+        _video_id = data.get("id") or ""
         videos.append({
-            "id": data.get("id"),
+            "id": _video_id,
             "descripcion": data.get("desc", ""),
+            "autor": username,
+            "play_url": data.get("video", {}).get("playAddr") or data.get("video", {}).get("downloadAddr", ""),
+            "url": f"https://www.tiktok.com/@{username}/video/{_video_id}",
         })
         if len(videos) >= count:
             break

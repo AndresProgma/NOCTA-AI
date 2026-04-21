@@ -61,6 +61,10 @@ async def collect_texts_from_videos(api, videos: list[dict], comments_per_video:
         if video.get("descripcion"):
             all_texts.append(video["descripcion"])
 
+        video_url = video.get("url", "")
+        autor = video.get("autor", "")
+        if video_url:
+            print(f"   🔗 {video_url}")
         print(f"   💬 Video {i + 1}/{len(videos)}: obteniendo comentarios...")
         comments = await fetch_comments_safe(api, video["id"], comments_per_video)
         all_texts.extend(comments)

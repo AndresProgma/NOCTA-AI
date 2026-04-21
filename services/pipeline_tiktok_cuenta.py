@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 from TikTokApi import TikTokApi
 from services.scraping import get_user_videos
-from services.analytics import analyze_competitor
-from services.session_config import create_sessions_with_retry, select_region
+from services.analytics import analyze_competitor, build_transcription_context
+from services.session_config import create_sessions_with_retry, select_region, ask_transcription
 from services.human_pace import collect_texts_from_videos
 
 load_dotenv()
@@ -26,7 +26,7 @@ PIPELINE_NAME = "tiktok_cuenta"
 
 
 
-async def run_pipeline(username: str, video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None) -> dict:
+async def run_pipeline(username: str, video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None, transcribe: bool = False) -> dict:
     # Espía una cuenta competidora: extrae sus videos y los comentarios que generan para entender qué resuena con su audiencia.
     # Nocta lo usa para identificar ángulos de contenido ganadores y qué tipo de oferta está funcionando en el nicho.
     print(f"\n🚀 Iniciando pipeline de competidor: '@{username}'")
@@ -48,17 +48,29 @@ async def run_pipeline(username: str, video_count: int = 2, comments_per_video: 
         print(f"\n💬 Etapa 3: Extrayendo comentarios (modo humano)...")
         all_texts = await collect_texts_from_videos(api, videos, comments_per_video)
         print(f"   → Total textos recolectados: {len(all_texts)}")
-        return all_texts
+
+        video_context = ""
+        if transcribe:
+            print(f"\n🎙️  Etapa 3.5: Transcribiendo videos de @{username}...")
+            video_context = await build_transcription_context(api, videos)
+
+        return all_texts, video_context
 
     if api is not None:
-        all_texts = await _run(api)
+        all_texts, video_context = await _run(api)
     else:
         async with TikTokApi() as api:
             await create_sessions_with_retry(api, ms_token, pipeline=PIPELINE_NAME, country=country)
-            all_texts = await _run(api)
+            all_texts, video_context = await _run(api)
+
+    if video_context:
+        print(f"\n📄 Contexto de transcripciones:")
+        print("-" * 50)
+        print(video_context)
+        print("-" * 50)
 
     print(f"\n🧠 Etapa 4: Analizando qué está funcionando para @{username}...")
-    insights = analyze_competitor(username, all_texts)
+    insights = analyze_competitor(username, all_texts, video_context=video_context)
 
     print("\n✅ Pipeline completado")
     print("=" * 50)
@@ -68,4 +80,6 @@ async def run_pipeline(username: str, video_count: int = 2, comments_per_video: 
 
 
 if __name__ == "__main__":
-    asyncio.run(run_pipeline("therock", video_count=2, comments_per_video=10, country=select_region()))
+    country = select_region()
+    transcribe = ask_transcription()
+    asyncio.run(run_pipeline("therock", video_count=2, comments_per_video=10, country=country, transcribe=transcribe))

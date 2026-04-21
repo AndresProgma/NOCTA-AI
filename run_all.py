@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
 from TikTokApi import TikTokApi
-from services.session_config import create_sessions_with_retry, select_region
+from services.session_config import create_sessions_with_retry, select_region, ask_transcription
 
 import services.pipeline_tiktok_hashtag as p_hashtag
 import services.pipeline_tiktok_mapa_nicho as p_nicho
@@ -19,6 +19,7 @@ ms_token = os.environ.get("ms_token", None)
 
 async def main():
     country = select_region()
+    transcribe = ask_transcription()
     print("🔌 Creando sesión compartida con TikTok...")
     async with TikTokApi() as api:
         await create_sessions_with_retry(api, ms_token, pipeline="run_all", country=country)
@@ -32,6 +33,7 @@ async def main():
             videos_por_hashtag=2,
             comments_per_video=5,
             api=api,
+            transcribe=transcribe,
         )
 
         await p_hashtag.run_pipeline(
@@ -39,6 +41,7 @@ async def main():
             video_count=2,
             comments_per_video=5,
             api=api,
+            transcribe=transcribe,
         )
 
         await p_cuenta.run_pipeline(
@@ -46,12 +49,14 @@ async def main():
             video_count=2,
             comments_per_video=5,
             api=api,
+            transcribe=transcribe,
         )
 
         await p_trending.run_pipeline(
             video_count=2,
             comments_per_video=5,
             api=api,
+            transcribe=transcribe,
         )
 
         await p_validacion.run_pipeline(
@@ -59,6 +64,7 @@ async def main():
             video_count=2,
             comments_per_video=5,
             api=api,
+            transcribe=transcribe,
         )
 
 

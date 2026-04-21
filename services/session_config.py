@@ -34,6 +34,21 @@ def select_region() -> str | None:
         print("   Opción inválida, intenta de nuevo.")
 
 
+def ask_transcription() -> bool:
+    # Pregunta al usuario si quiere transcribir los videos con Whisper antes de analizar.
+    print("\n🎙️  ¿Quieres transcribir los videos para usarlos como contexto?")
+    print("   (Consume bandwidth del proxy y tiempo extra, pero mejora los insights)")
+    while True:
+        opcion = input("   → s/n: ").strip().lower()
+        if opcion in ("s", "si", "sí", "y", "yes"):
+            print("   ✅ Transcripción ACTIVADA\n")
+            return True
+        if opcion in ("n", "no"):
+            print("   ⏭️  Transcripción desactivada\n")
+            return False
+        print("   Opción inválida, escribe s o n.")
+
+
 def _log(proxy_server: str, status: str, pipeline: str = ""):
     # Escribe una línea timestamped en proxy_log.txt con el estado del proxy (USADO/OK/BLOCKED).
     os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)

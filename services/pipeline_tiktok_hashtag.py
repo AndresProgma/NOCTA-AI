@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 from TikTokApi import TikTokApi
 from services.scraping import get_videos_by_hashtag
-from services.analytics import analyze_signals
-from services.session_config import create_sessions_with_retry, select_region
+from services.analytics import analyze_signals, build_transcription_context
+from services.session_config import create_sessions_with_retry, select_region, ask_transcription
 from services.human_pace import collect_texts_from_videos
 
 load_dotenv()
@@ -25,7 +25,7 @@ PIPELINE_NAME = "tiktok_hashtag"
   antes de invertir: ¿qué está diciendo realmente la audiencia sobre este tema? No métricas de vanidad, sino el texto crudo de personas
   reales expresando sus problemas, frustraciones y deseos. Es la base para construir mensajes de venta que conectan."""
 
-async def run_pipeline(keyword: str, video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None) -> dict:
+async def run_pipeline(keyword: str, video_count: int = 2, comments_per_video: int = 10, api=None, country: str | None = None, transcribe: bool = False) -> dict:
     # Analiza un hashtag específico para descubrir qué dice la audiencia en TikTok.
     # Nocta lo usa para entender los dolores, deseos e intenciones de compra reales de un nicho.
     print(f"\n🚀 Iniciando pipeline para: '{keyword}'")
@@ -40,17 +40,29 @@ async def run_pipeline(keyword: str, video_count: int = 2, comments_per_video: i
         print(f"\n💬 Etapa 2: Extrayendo comentarios (modo humano)...")
         all_texts = await collect_texts_from_videos(api, videos, comments_per_video)
         print(f"   → Total textos recolectados: {len(all_texts)}")
-        return all_texts
+
+        video_context = ""
+        if transcribe:
+            print(f"\n🎙️  Etapa 2.5: Transcribiendo videos...")
+            video_context = await build_transcription_context(api, videos)
+
+        return all_texts, video_context
 
     if api is not None:
-        all_texts = await _run(api)
+        all_texts, video_context = await _run(api)
     else:
         async with TikTokApi() as api:
             await create_sessions_with_retry(api, ms_token, pipeline=PIPELINE_NAME, country=country)
-            all_texts = await _run(api)
+            all_texts, video_context = await _run(api)
+
+    if video_context:
+        print(f"\n📄 Contexto de transcripciones:")
+        print("-" * 50)
+        print(video_context)
+        print("-" * 50)
 
     print(f"\n🧠 Etapa 3: Analizando señales con IA...")
-    insights = analyze_signals(keyword, all_texts)
+    insights = analyze_signals(keyword, all_texts, video_context=video_context)
 
     print("\n✅ Pipeline completado")
     print("=" * 50)
@@ -60,4 +72,6 @@ async def run_pipeline(keyword: str, video_count: int = 2, comments_per_video: i
 
 
 if __name__ == "__main__":
-    asyncio.run(run_pipeline("#nopuedobajardepeso", video_count=2, comments_per_video=10, country=select_region()))
+    country = select_region()
+    transcribe = ask_transcription()
+    asyncio.run(run_pipeline("#exparejas", video_count=2, comments_per_video=10, country=country, transcribe=transcribe))
