@@ -64,11 +64,18 @@ async def run_pipeline(keywords: list[str], video_count: int = 2, comments_per_v
             await create_sessions_with_retry(api, ms_token, pipeline=PIPELINE_NAME, country=country)
             resultados = await _run(api)
 
+    def _score(k: str, dim: str) -> float:
+        return resultados[k].get("scores", {}).get(dim, {}).get("valor", 0.0)
+
     comparacion = {
         "keywords_analizadas": keywords,
         "resultados_por_keyword": resultados,
-        "ganador_friccion": max(resultados, key=lambda k: len(resultados[k].get("fricciones", []))),
-        "ganador_intencion": max(resultados, key=lambda k: len(resultados[k].get("intenciones", []))),
+        "ranking": {
+            "intencion_compra": sorted(keywords, key=lambda k: _score(k, "intencion_compra"), reverse=True),
+            "relacion_comentarios": sorted(keywords, key=lambda k: _score(k, "relacion_comentarios"), reverse=True),
+            "potencial_tematica": sorted(keywords, key=lambda k: _score(k, "potencial_tematica"), reverse=True),
+        },
+        "ganador_general": max(keywords, key=lambda k: _score(k, "potencial_tematica")),
     }
 
     print("\n✅ Pipeline de validación completado")
